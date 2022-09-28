@@ -93,7 +93,7 @@ void loop()
   sum1 = sumR / 30000;
   // sum1 /= 2;
   // sum1 -= 1200;
-  sum1=vmax-2267;
+  sum1 = vmax - 2267;
   // sum1 /= 4;
   Serial.print("vmin = ");
   Serial.println(vmin);
@@ -102,19 +102,41 @@ void loop()
   Serial.print("sum1 = ");
   Serial.println(sum1);
 
+  vmin = 4095, vmax = 0;
   for (uint32_t i = 0; i < samplesN; i++)
   {
     voltN = adc1_get_raw(ADC1_CHANNEL_5);
-    voltN = voltN - 1235;
+    // voltN = voltN - 1235;
     // voltN = voltN - 1365;
-    sumN = sumN + voltN;
+    if (voltN < vmin)
+    {
+      vmin = voltN;
+    }
+    if (voltN > vmax)
+    {
+      vmax = voltN;
+    }
+    // sumN = sumN + voltN;
+    sumN += voltN;
     ++CountN;
   }
   sum2 = sumN / 30000;
+  // Serial.println(sum2);
+
+  sum2 = vmax - 1300;
+  // sum1 /= 4;
+  Serial.print("vmin = ");
+  Serial.println(vmin);
+  Serial.print("vmax = ");
+  Serial.println(vmax);
+  Serial.print("sum2 = ");
   Serial.println(sum2);
 
   ripple = (sum1 + sum2) * 3300 / 4095;
   // ripple*=0.25;  //  re-scale
+  Serial.print("ripple = ");
+  Serial.println(ripple / 1.00);
+
   if (digitalRead(PIN_HALF_A) == HIGH)
   {
     c1 = 0.5;
