@@ -70,15 +70,13 @@ void loop()
   //    }
   //    ++CountN;
   //  }
+
   int vmin = 4095, vmax = 0;
   for (uint32_t i = 0; i < samples; i++)
   {
     voltR = adc1_get_raw(ADC1_CHANNEL_7);
     // voltR = voltR - 1200;
-    // voltR = voltR - 1235;
-    // voltR = voltR - 1620;
-    // sumR = sumR + voltR;
-    // voltR = voltR - 1620;
+
     if (voltR < vmin)
     {
       vmin = voltR;
@@ -91,15 +89,15 @@ void loop()
     ++Count;
   }
   sum1 = sumR / 30000;
-  // sum1 /= 2;
-  // sum1 -= 1200;
-  sum1 = vmax - 2267;
-  // sum1 /= 4;
-  Serial.print("vmin = ");
-  Serial.println(vmin);
-  Serial.print("vmax = ");
-  Serial.println(vmax);
-  Serial.print("sum1 = ");
+
+  // sum1 = vmax - 2030; // optimal cal Positive Peak
+  sum1 = vmax - 2015; // optimal cal Positive Peak +10 mV
+
+  // Serial.print("vmin = ");
+  // Serial.println(vmin);
+  // Serial.print("vmax = ");
+  // Serial.println(vmax);
+  Serial.print("sum1 P = ");
   Serial.println(sum1);
 
   vmin = 4095, vmax = 0;
@@ -107,7 +105,7 @@ void loop()
   {
     voltN = adc1_get_raw(ADC1_CHANNEL_5);
     // voltN = voltN - 1235;
-    // voltN = voltN - 1365;
+
     if (voltN < vmin)
     {
       vmin = voltN;
@@ -116,24 +114,25 @@ void loop()
     {
       vmax = voltN;
     }
-    // sumN = sumN + voltN;
+
     sumN += voltN;
     ++CountN;
   }
   sum2 = sumN / 30000;
   // Serial.println(sum2);
 
-  sum2 = vmax - 1300;
-  // sum1 /= 4;
-  Serial.print("vmin = ");
-  Serial.println(vmin);
-  Serial.print("vmax = ");
-  Serial.println(vmax);
-  Serial.print("sum2 = ");
+  // sum2 = vmax - 1320; // optimal cal Negative Peak
+  sum2 = vmax - 1305; // optimal cal Negative Peak  +12mV
+
+  // Serial.print("vmin = ");
+  // Serial.println(vmin);
+  // Serial.print("vmax = ");
+  // Serial.println(vmax);
+  Serial.print("sum2 N = ");
   Serial.println(sum2);
 
   ripple = (sum1 + sum2) * 3300 / 4095;
-  // ripple*=0.25;  //  re-scale
+
   Serial.print("ripple = ");
   Serial.println(ripple / 1.00);
 
