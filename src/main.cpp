@@ -1,140 +1,35 @@
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
-#include <chrono>
 #include <driver/adc.h>
+#include <uptime_formatter.h>
 
+#define N_AVG 250
 #define PIN_HALF_A 25
 #define PIN_1_A 26
 #define PIN_2_A 27
 #define PIN_V 14
 
-unsigned long Start;
-unsigned short Count, CountN;
+// unsigned short Count, CountN;
 int lcdColumns = 16;
 int lcdRows = 2;
 String volt, ripple;
-// float c1,c2,c3,current;
-// int voltR = 0, min_voltR = 4095, max_voltR = 0, rippleR = 0;
-// int voltN = 0, min_voltN = 4095, max_voltN = 0, rippleN = 0;
+
 LiquidCrystal_I2C lcd(0x27, lcdColumns, lcdRows);
 
-void setup()
+QueueHandle_t qu_task;
+TaskHandle_t xHandle = NULL, xHandle2 = NULL;
+
+typedef struct ANALOG_READ
 {
-  // put your setup code here, to run once:
-  Serial.begin(115200);
-  pinMode(PIN_HALF_A, INPUT);
-  pinMode(PIN_1_A, INPUT);
-  pinMode(PIN_2_A, INPUT);
-  adc1_config_width(ADC_WIDTH_BIT_12);
-  adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11); // ADC1_CHANNEL_5-->33 nagative peak
-  adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11); // ADC1_CHANNEL_7-->35 positive peak
-  Start = millis();
-  lcd.init();
-  lcd.backlight();
-}
+  uint8_t pin;
+  uint16_t value;
+} _analog_read;
 
-void loop()
+// Function
+
+float currentMeas()
 {
-  // put your main code here, to run repeatedly:
-  float ripple = 0.0;
-  int voltR = 0, min_voltR = 4095, max_voltR = 0, rippleR = 0;
-  int voltN = 0, min_voltN = 4095, max_voltN = 0, rippleN = 0;
-  float c1 = 0.0, c2 = 0.0, c3 = 0.0, current = 0.0;
-  float volts = 0;
-  int adc = 0;
-  float adc_f = 0.00, sum1 = 0.00, sum2 = 0.00;
-  long adc_sum = 0, sumR = 0, sumN = 0;
-  const uint16_t samples = 30000;
-  const uint16_t samplesN = 30000;
-  for (uint32_t i = 0; i < 10; i++)
-  {
-    adc = analogRead(PIN_V);
-    adc_sum = adc_sum + adc;
-  }
-  adc_f = adc_sum / 10;
-  //  for (uint32_t i = 0; i < samples; i++) {
-  //    voltR = adc1_get_raw(ADC1_CHANNEL_7);
-  //    if ((voltR < min_voltR) && (voltR != 0)) {
-  //      min_voltR = voltR;
-  //    } else {
-  //      max_voltR = voltR;
-  //    }
-  //    ++Count;
-  //  }
-  //  for (uint32_t i = 0; i < samplesN; i++) {
-  //    voltN = adc1_get_raw(ADC1_CHANNEL_5);
-  //    if ((voltN < min_voltN) && (voltN != 0)) {
-  //      min_voltN = voltN;
-  //    } else {
-  //      max_voltN = voltN;
-  //    }
-  //    ++CountN;
-  //  }
-
-  int vmin = 4095, vmax = 0;
-  for (uint32_t i = 0; i < samples; i++)
-  {
-    voltR = adc1_get_raw(ADC1_CHANNEL_7);
-    // voltR = voltR - 1200;
-
-    if (voltR < vmin)
-    {
-      vmin = voltR;
-    }
-    if (voltR > vmax)
-    {
-      vmax = voltR;
-    }
-    sumR += voltR;
-    ++Count;
-  }
-  sum1 = sumR / 30000;
-
-  // sum1 = vmax - 2030; // optimal cal Positive Peak
-  sum1 = vmax - 2015; // optimal cal Positive Peak +10 mV
-
-  // Serial.print("vmin = ");
-  // Serial.println(vmin);
-  // Serial.print("vmax = ");
-  // Serial.println(vmax);
-  Serial.print("sum1 P = ");
-  Serial.println(sum1);
-
-  vmin = 4095, vmax = 0;
-  for (uint32_t i = 0; i < samplesN; i++)
-  {
-    voltN = adc1_get_raw(ADC1_CHANNEL_5);
-    // voltN = voltN - 1235;
-
-    if (voltN < vmin)
-    {
-      vmin = voltN;
-    }
-    if (voltN > vmax)
-    {
-      vmax = voltN;
-    }
-
-    sumN += voltN;
-    ++CountN;
-  }
-  sum2 = sumN / 30000;
-  // Serial.println(sum2);
-
-  // sum2 = vmax - 1320; // optimal cal Negative Peak
-  sum2 = vmax - 1305; // optimal cal Negative Peak  +12mV
-
-  // Serial.print("vmin = ");
-  // Serial.println(vmin);
-  // Serial.print("vmax = ");
-  // Serial.println(vmax);
-  Serial.print("sum2 N = ");
-  Serial.println(sum2);
-
-  ripple = (sum1 + sum2) * 3300 / 4095;
-
-  Serial.print("ripple = ");
-  Serial.println(ripple / 1.00);
+  float c1 = 0.0, c2 = 0.0, c3 = 0.0;
 
   if (digitalRead(PIN_HALF_A) == HIGH)
   {
@@ -148,23 +43,21 @@ void loop()
   {
     c3 = 2.0;
   }
-  else
-  {
-    current = 0.0;
-  }
-  current = c1 + c2 + c3;
-  // set cursor to first column, first row
-  //  Serial.println("############");
-  //  Serial.println(max_voltN);
-  //  Serial.println(min_voltN);
-  //  Serial.println(max_voltN-min_voltN);
-  //  Serial.println("-------------");
-  //  Serial.println(max_voltR);
-  //  Serial.println(min_voltR);
-  //  Serial.println(max_voltR-min_voltR);
-  //  Serial.println("-------------");
-  //  Serial.println(((max_voltR-min_voltR)+(max_voltN-min_voltN))*3300/4095);
-  //  Serial.println("############");
+
+  return c1 + c2 + c3;
+}
+
+void display(int pos, int neg, int level)
+{
+  float ripple = 0.0, current = 0.0, adc_f = 0.0;
+  ripple = (pos + neg) * 3300 / 4095;
+  adc_f = level / 1.0;
+  current = currentMeas();
+
+  Serial.print("ripple = ");
+  Serial.println(ripple / 1.00);
+  Serial.println("current : " + String(current));
+
   lcd.setCursor(0, 0);
   lcd.print(current);
   lcd.setCursor(3, 0);
@@ -184,6 +77,145 @@ void loop()
   lcd.print(ripple / 3.8);
   lcd.setCursor(11, 1);
   lcd.print("mVp-p");
-  delay(1000);
-  // lcd.clear();  // for clear display LCD
+  //   delay(1000);
+  //   // lcd.clear();  // for clear display LCD
+}
+
+// Task Function
+
+void vGetQueueTask(void *pvParameters)
+{
+  int getvalue;
+  _analog_read data;
+  uint8_t count1 = 0;
+  uint8_t count2 = 0;
+  uint32_t sum1 = 0;
+  uint32_t sum2 = 0;
+
+  while (true)
+  {
+    if (xQueueReceive(qu_task, (void *)&data, 0) == pdTRUE)
+    {
+      // Serial.println("pin:" + String(data.pin) + " value: " + String(data.value));
+      // Serial.println("up " + uptime_formatter::getUptime());
+
+      if (data.pin == 1)
+      {
+        sum1 += data.value;
+        count1++;
+
+        // if (count1 >= N_AVG)
+        // {
+        //   Serial.println("data1:" + String(sum1 / N_AVG));
+        //   Serial.println("up " + uptime_formatter::getUptime());
+        //   sum1 = 0;
+        //   // sum2 = 0;
+        //   count1 = 0;
+        //   // count2 = 0;
+        // }
+      }
+      if (data.pin == 2)
+      {
+        sum2 += data.value;
+        count2++;
+
+        // if (count2 >= N_AVG)
+        // {
+        //   Serial.println("data2: " + String(sum2 / N_AVG));
+        //   Serial.println("up " + uptime_formatter::getUptime());
+        //   // sum1 = 0;
+        //   sum2 = 0;
+        //   // count1 = 0;
+        //   count2 = 0;
+        // }
+      }
+
+      if ((count1 >= N_AVG) && (count2 >= N_AVG))
+      {
+        long adc_sum = 0;
+        uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
+
+        for (uint32_t i = 0; i < 10; i++)
+        {
+          adc_12v = analogRead(PIN_V);
+          adc_sum += adc_12v;
+        }
+
+        adc_12f = adc_sum / 10;
+        pos_pk = sum1 / N_AVG;
+        neg_pk = sum2 / N_AVG;
+
+        Serial.println("data_12v: " + String(adc_12f));
+        Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk));
+        Serial.println("up " + uptime_formatter::getUptime());
+
+        display(pos_pk, neg_pk, adc_12f);
+
+        adc_sum = 0;
+        sum1 = 0;
+        sum2 = 0;
+        count1 = 0;
+        count2 = 0;
+      }
+    }
+    vTaskDelay(3 / portTICK_PERIOD_MS);
+  }
+}
+
+void vPutQueueTask(void *pvParameters)
+{
+  _analog_read data;
+  adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11); // ADC1_CHANNEL_7-->35 positive peak
+
+  while (true)
+  {
+    data.pin = 1;
+    data.value = adc1_get_raw(ADC1_CHANNEL_7);
+    xQueueSend(qu_task, (void *)&data, 0);
+    vTaskDelay(8 / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(xHandle);
+}
+
+void vPutQueueTask2(void *pvParameters)
+{
+  _analog_read data;
+  adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11); // ADC1_CHANNEL_5-->33 nagative peak
+
+  while (true)
+  {
+    data.pin = 2;
+    data.value = adc1_get_raw(ADC1_CHANNEL_5);
+    xQueueSend(qu_task, (void *)&data, 0);
+    vTaskDelay(8 / portTICK_PERIOD_MS);
+  }
+  vTaskDelete(xHandle2);
+}
+
+void setup()
+{
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  Serial.println("up " + uptime_formatter::getUptime());
+
+  pinMode(PIN_HALF_A, INPUT);
+  pinMode(PIN_1_A, INPUT);
+  pinMode(PIN_2_A, INPUT);
+
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  // adc1_config_channel_atten(ADC1_CHANNEL_5, ADC_ATTEN_DB_11); // ADC1_CHANNEL_5-->33 nagative peak
+  // adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11); // ADC1_CHANNEL_7-->35 positive peak
+
+  lcd.init();
+  lcd.backlight();
+
+  qu_task = xQueueCreate(2 * N_AVG, sizeof(int));
+  xTaskCreate(vGetQueueTask, "vGetQueueTask", 1600, NULL, tskIDLE_PRIORITY - 1, NULL);
+  xTaskCreate(vPutQueueTask, "vPutQueueTask", 1500, NULL, tskIDLE_PRIORITY - 2, &xHandle);
+  xTaskCreate(vPutQueueTask2, "vPutQueueTask2", 1500, NULL, tskIDLE_PRIORITY - 2, &xHandle2);
+}
+
+void loop()
+{
+  // put your main code here, to run repeatedly:
 }
