@@ -7,7 +7,7 @@
 #define NREGAIN(x) 8e-6 * x *x + 0.1004 * x + 5.6466 // y = 8E-06x2 + 0.1004x + 5.6466
 #define PREGAIN(x) 4e-6 * x *x + 0.1089 * x + 4.3485 // y = 4E-06x2 + 0.1089x + 4.3485
 #define NVREF_COMP(x) (int)(169 - 0.008 * x)
-#define N_AVG 500
+#define N_AVG 20
 
 #define PIN_HALF_A 25
 #define PIN_1_A 26
@@ -138,7 +138,7 @@ void display(_print_scr *data)
 
   Serial.print("ripple = ");
   Serial.println(ripple / 1.00);
-  Serial.println("current : " + String(current));
+  // Serial.println("current : " + String(current));
 
   lcd.setCursor(0, 0);
   lcd.print(current);
@@ -232,8 +232,6 @@ void vGetQueueTask(void *pvParameters)
   uint32_t sum_pos = 0;
   uint32_t sum_neg = 0;
   uint32_t sum_level = 0;
-  uint16_t pkmin1 = 4095, pkmin2 = 4095, levelmin = 4095;
-  uint16_t pkmax1 = 0, pkmax2 = 0, levelmax = 0;
 
   while (true)
   {
@@ -241,91 +239,97 @@ void vGetQueueTask(void *pvParameters)
     {
       // Serial.println("pin:" + String(data.number) + " value: " + String(data.value));
       // Serial.println("up " + uptime_formatter::getUptime());
+      // Serial.println("up " + millis());
 
       if (data.number == 1)
       {
         sum_pos += data.value;
-
-        if (data.value < pkmin1)
-        {
-          pkmin1 = data.value;
-        }
-        if (data.value > pkmax1)
-        {
-          pkmax1 = data.value;
-        }
         count1++;
+
+        if (count1 >= N_AVG)
+        {
+          uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
+
+          pos_pk = (sum_pos) / (N_AVG);
+          pos_pk += (uint16_t)NVREF_COMP((int)pos_pk);
+
+          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
+          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
+          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
+          // Serial.println("data_12v_level: " + String(adc_12v));
+          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
+          // Serial.println("-------------------------------------------------------\r\n");
+
+          xSemaphoreTake(mutex, portMAX_DELAY);
+          data_scr.pk_pos = pos_pk;
+          xSemaphoreGive(mutex);
+
+          sum_pos = 0;
+          count1 = 0;
+        }
       }
       if (data.number == 2)
       {
         sum_neg += data.value;
-
-        if (data.value < pkmin2)
-        {
-          pkmin2 = data.value;
-        }
-        if (data.value > pkmax2)
-        {
-          pkmax2 = data.value;
-        }
         count2++;
+
+        if (count2 >= N_AVG)
+        {
+          uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
+
+          neg_pk = (sum_neg) / (N_AVG);
+          neg_pk += (uint16_t)NVREF_COMP((int)neg_pk);
+
+          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
+          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
+          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
+          // Serial.println("data_12v_level: " + String(adc_12v));
+          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
+          // Serial.println("-------------------------------------------------------\r\n");
+
+          xSemaphoreTake(mutex, portMAX_DELAY);
+          data_scr.pk_neg = neg_pk;
+          xSemaphoreGive(mutex);
+
+          sum_neg = 0;
+          count2 = 0;
+        }
       }
       if (data.number == 3)
       {
         sum_level += data.value;
-
-        if (data.value < levelmin)
-        {
-          levelmin = data.value;
-        }
-        if (data.value > levelmax)
-        {
-          levelmax = data.value;
-        }
         count3++;
+
+        if (count3 >= N_AVG)
+        {
+          uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
+
+          adc_12v = (sum_level) / (N_AVG);
+          adc_12v += (uint16_t)NVREF_COMP((int)adc_12v);
+
+          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
+          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
+          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
+          // Serial.println("data_12v_level: " + String(adc_12v));
+          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
+          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
+          // Serial.println("-------------------------------------------------------\r\n");
+
+          xSemaphoreTake(mutex, portMAX_DELAY);
+          data_scr.level = adc_12v;
+          xSemaphoreGive(mutex);
+
+          sum_level = 0;
+          count3 = 0;
+        }
       }
     }
-
-    if ((count1 >= N_AVG) && (count2 >= N_AVG) && (count3 >= N_AVG))
-    {
-      uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
-
-      pos_pk = (sum_pos - pkmin1 - pkmax1) / (N_AVG - 2);
-      neg_pk = (sum_neg - pkmin2 - pkmax2) / (N_AVG - 2);
-      adc_12v = (sum_level - levelmin - levelmax) / (N_AVG - 2);
-
-      pos_pk += (uint16_t)NVREF_COMP((int)pos_pk);
-      neg_pk += (uint16_t)NVREF_COMP((int)neg_pk);
-
-      // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
-      // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
-      // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
-      // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
-      // Serial.println("data_12v_level: " + String(adc_12v));
-      // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk));
-
-      xSemaphoreTake(mutex, portMAX_DELAY);
-      data_scr.level = adc_12v;
-      data_scr.pk_pos = pos_pk;
-      data_scr.pk_neg = neg_pk;
-      xSemaphoreGive(mutex);
-
-      pkmin1 = 4095;
-      pkmin2 = 4095;
-      levelmin = 4095;
-      pkmax1 = 0;
-      pkmax2 = 0;
-      levelmax = 0;
-
-      sum_level = 0;
-      sum_pos = 0;
-      sum_neg = 0;
-
-      count1 = 0;
-      count2 = 0;
-      count3 = 0;
-    }
-    vTaskDelay(1 / portTICK_PERIOD_MS);
+    vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
 
@@ -336,11 +340,25 @@ void vPutQueueTask(void *pvParameters)
 
   while (true)
   {
-    data.number = 1;
-    data.value = adc1_get_raw(ADC1_CHANNEL_7);
+    uint16_t read = 0;
+    uint16_t max_value = 0;
+    for (int i = 0; i < 20; i++)
+    {
+      read = adc1_get_raw(ADC1_CHANNEL_7);
+      if (read > max_value)
+      {
+        max_value = read;
+      }
+      vTaskDelay(5 / portTICK_PERIOD_MS);
+      // delay(10);
+    }
 
+    data.number = 1;
+    // data.value = adc1_get_raw(ADC1_CHANNEL_7);
+    data.value = max_value;
+    // Serial.println("raw_pos : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(4 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
@@ -352,11 +370,27 @@ void vPutQueueTask2(void *pvParameters)
 
   while (true)
   {
-    data.number = 2;
-    data.value = adc1_get_raw(ADC1_CHANNEL_5);
+    uint16_t read = 0;
+    uint16_t max_value = 0;
+    for (int i = 0; i < 20; i++)
+    {
+      read = adc1_get_raw(ADC1_CHANNEL_5);
+      if (read > max_value)
+      {
+        max_value = read;
+      }
+      vTaskDelay(5 / portTICK_PERIOD_MS);
+      // delay(10);
+    }
 
+    // Serial.println("Negative peak -------- uptime : " + String(millis()) + " -----> " + String(max_value));
+
+    data.number = 2;
+    // data.value = adc1_get_raw(ADC1_CHANNEL_5);
+    data.value = max_value;
+    // Serial.println("raw_neg : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(4 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
@@ -369,9 +403,9 @@ void vPutQueueTask3(void *pvParameters)
   {
     data.number = 3;
     data.value = analogRead(PIN_V);
-
+    // Serial.println("raw_12v : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(4 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
