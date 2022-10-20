@@ -2,12 +2,11 @@
 #include <driver/adc.h>
 #include <LiquidCrystal_I2C.h>
 
-// #define NREGAIN(x) 4e-5 * x *x + 0.1178 * x + 22.914
-// #define PREGAIN(x) 3e-5 * x *x + 0.1389 * x + 19.365
-#define NREGAIN(x) 8e-6 * x *x + 0.1004 * x + 5.6466 // y = 8E-06x2 + 0.1004x + 5.6466
-#define PREGAIN(x) 4e-6 * x *x + 0.1089 * x + 4.3485 // y = 4E-06x2 + 0.1089x + 4.3485
+#define FIRMVERS 651027
+#define NREGAIN(x) 3e-5 * x *x - 0.0133 * x + 29.532 // y = 3E-05x2 - 0.0133x + 29.532
+#define PREGAIN(x) 9e-6 * x *x + 0.0401 * x + 9.3383 // y = 9E-06x2 + 0.0401x + 9.3383
 #define NVREF_COMP(x) (int)(169 - 0.008 * x)
-#define N_AVG 20
+#define N_AVG 10
 
 #define PIN_HALF_A 25
 #define PIN_1_A 26
@@ -218,7 +217,7 @@ void TaskPrintSCR(void *pvParameters)
     Serial.println("pk_pos : " + String(data_scr.pk_pos));
     Serial.println("pk_neg : " + String(data_scr.pk_neg) + "\r\n");
     xSemaphoreGive(mutex);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(1500 / portTICK_PERIOD_MS);
   }
 }
 
@@ -235,32 +234,26 @@ void vGetQueueTask(void *pvParameters)
 
   while (true)
   {
-    if (xQueueReceive(qu_task, (void *)&data, 0) == pdTRUE)
+    if (xQueueReceive(qu_task, (void *)&data, 0) == pdTRUE, 50)
     {
       // Serial.println("pin:" + String(data.number) + " value: " + String(data.value));
       // Serial.println("up " + uptime_formatter::getUptime());
       // Serial.println("up " + millis());
 
-      if (data.number == 1)
+      switch (data.number)
       {
-        sum_pos += data.value;
+      case 1:
+        // sum_pos += data.value;
+        sum_pos += pow(data.value, 2);
         count1++;
 
         if (count1 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
 
-          pos_pk = (sum_pos) / (N_AVG);
+          // pos_pk = (sum_pos) / (N_AVG);
+          pos_pk = sqrt((sum_pos) / (N_AVG));
           pos_pk += (uint16_t)NVREF_COMP((int)pos_pk);
-
-          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
-          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
-          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
-          // Serial.println("data_12v_level: " + String(adc_12v));
-          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
-          // Serial.println("-------------------------------------------------------\r\n");
 
           xSemaphoreTake(mutex, portMAX_DELAY);
           data_scr.pk_pos = pos_pk;
@@ -269,27 +262,19 @@ void vGetQueueTask(void *pvParameters)
           sum_pos = 0;
           count1 = 0;
         }
-      }
-      if (data.number == 2)
-      {
-        sum_neg += data.value;
+        break;
+      case 2:
+        // sum_neg += data.value;
+        sum_neg += pow(data.value, 2);
         count2++;
 
         if (count2 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
 
-          neg_pk = (sum_neg) / (N_AVG);
+          // neg_pk = (sum_neg) / (N_AVG);
+          neg_pk = sqrt((sum_neg) / (N_AVG));
           neg_pk += (uint16_t)NVREF_COMP((int)neg_pk);
-
-          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
-          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
-          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
-          // Serial.println("data_12v_level: " + String(adc_12v));
-          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
-          // Serial.println("-------------------------------------------------------\r\n");
 
           xSemaphoreTake(mutex, portMAX_DELAY);
           data_scr.pk_neg = neg_pk;
@@ -298,27 +283,19 @@ void vGetQueueTask(void *pvParameters)
           sum_neg = 0;
           count2 = 0;
         }
-      }
-      if (data.number == 3)
-      {
-        sum_level += data.value;
+        break;
+      case 3:
+        // sum_level += data.value;
+        sum_level += pow(data.value, 2);
         count3++;
 
         if (count3 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
 
-          adc_12v = (sum_level) / (N_AVG);
+          // adc_12v = (sum_level) / (N_AVG);
+          adc_12v = sqrt((sum_level) / (N_AVG));
           adc_12v += (uint16_t)NVREF_COMP((int)adc_12v);
-
-          // Serial.println("---------------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("pkmin1: " + String(pkmin1) + " " + "pkmax1: " + String(pkmax1));
-          // Serial.println("pkmin2: " + String(pkmin2) + " " + "pkmax2: " + String(pkmax2));
-          // Serial.println("levelmin: " + String(levelmin) + " " + "levelmax: " + String(levelmax));
-          // Serial.println("data_12v_level: " + String(adc_12v));
-          // Serial.println("\r\nNew Data ------- uptime : " + String(millis()) + " ------------------------");
-          // Serial.println("data1: " + String(pos_pk) + " " + "data2: " + String(neg_pk) + " " + "data_12v: " + String(adc_12v));
-          // Serial.println("-------------------------------------------------------\r\n");
 
           xSemaphoreTake(mutex, portMAX_DELAY);
           data_scr.level = adc_12v;
@@ -327,9 +304,12 @@ void vGetQueueTask(void *pvParameters)
           sum_level = 0;
           count3 = 0;
         }
+        break;
+      default:
+        break;
       }
     }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(150 / portTICK_PERIOD_MS);
   }
 }
 
@@ -342,15 +322,17 @@ void vPutQueueTask(void *pvParameters)
   {
     uint16_t read = 0;
     uint16_t max_value = 0;
-    for (int i = 0; i < 20; i++)
+    // for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 2000; i++)
     {
       read = adc1_get_raw(ADC1_CHANNEL_7);
       if (read > max_value)
       {
         max_value = read;
       }
-      vTaskDelay(5 / portTICK_PERIOD_MS);
-      // delay(10);
+
+      // vTaskDelay(2 / portTICK_PERIOD_MS);
+      delayMicroseconds(5);
     }
 
     data.number = 1;
@@ -358,7 +340,7 @@ void vPutQueueTask(void *pvParameters)
     data.value = max_value;
     // Serial.println("raw_pos : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
@@ -372,15 +354,17 @@ void vPutQueueTask2(void *pvParameters)
   {
     uint16_t read = 0;
     uint16_t max_value = 0;
-    for (int i = 0; i < 20; i++)
+    // for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 2000; i++)
     {
       read = adc1_get_raw(ADC1_CHANNEL_5);
       if (read > max_value)
       {
         max_value = read;
       }
-      vTaskDelay(5 / portTICK_PERIOD_MS);
-      // delay(10);
+
+      // vTaskDelay(2 / portTICK_PERIOD_MS);
+      delayMicroseconds(5);
     }
 
     // Serial.println("Negative peak -------- uptime : " + String(millis()) + " -----> " + String(max_value));
@@ -390,7 +374,7 @@ void vPutQueueTask2(void *pvParameters)
     data.value = max_value;
     // Serial.println("raw_neg : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
@@ -405,7 +389,7 @@ void vPutQueueTask3(void *pvParameters)
     data.value = analogRead(PIN_V);
     // Serial.println("raw_12v : " + String(data.value));
     xQueueSend(qu_task, (void *)&data, 0);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(200 / portTICK_PERIOD_MS);
   }
   vTaskDelete(xHandle);
 }
