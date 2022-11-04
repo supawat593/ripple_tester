@@ -6,7 +6,7 @@
 #define NREGAIN(x) 3e-5 * x *x - 0.0133 * x + 29.532 // y = 3E-05x2 - 0.0133x + 29.532
 #define PREGAIN(x) 9e-6 * x *x + 0.0401 * x + 9.3383 // y = 9E-06x2 + 0.0401x + 9.3383
 #define NVREF_COMP(x) (int)(169 - 0.008 * x)
-#define N_AVG 10
+#define N_AVG 8
 
 #define PIN_HALF_A 25
 #define PIN_1_A 26
@@ -43,6 +43,35 @@ void vGetQueueTask(void *pvParameters);
 void vPutQueueTask(void *pvParameters);
 void vPutQueueTask2(void *pvParameters);
 void vPutQueueTask3(void *pvParameters);
+
+uint16_t getMax(uint16_t daArray[], int iSize)
+{
+  // Allocate an array of the same size and sort it.
+  uint16_t *dpSorted = new uint16_t[iSize];
+
+  for (int i = 0; i < iSize; ++i)
+  {
+    dpSorted[i] = daArray[i];
+  }
+  for (int i = iSize - 1; i > 0; --i)
+  {
+    for (int j = 0; j < i; ++j)
+    {
+      if (dpSorted[j] > dpSorted[j + 1])
+      {
+        double dTemp = dpSorted[j];
+        dpSorted[j] = dpSorted[j + 1];
+        dpSorted[j + 1] = dTemp;
+      }
+    }
+  }
+
+  uint16_t value = 0;
+  value = dpSorted[iSize - 3] + dpSorted[iSize - 2] + dpSorted[iSize - 1];
+  delete[] dpSorted;
+
+  return value / 3;
+}
 
 float read_ratingA()
 {
@@ -108,15 +137,21 @@ void IRAM_ATTR onFalling3()
   }
 }
 
+void printWelcome()
+{
+  lcd.setCursor(0, 0);
+  lcd.print("Ripple Tester");
+  lcd.setCursor(0, 1);
+  lcd.print("FWBUILDS: ");
+  lcd.setCursor(10, 1);
+  lcd.print(FIRMVERS);
+  delay(2000);
+  lcd.clear();
+}
 void display(_print_scr *data)
 {
   float ripple = 0.0, current = 0.0, adc_f = 0.0;
   float neg_vp = 0.0, pos_vp = 0.0;
-
-  // ripple = (data->pk_pos + data->pk_neg) * 3300 / 4095;
-  // ripple /= 4.38; // cal back gain  G=4.7 (47k/10k)and  divider between 47k with 4.7k parallel 100k
-  // ripple /= 8.62; // cal back gain  G1=4.7 (47k/10k)  G2=2 (10k/10k) and  divider between 47k with 4.7k parallel 100k
-  // ripple = (float)REGAIN((float)ripple);
 
   neg_vp = (data->pk_neg) * 3300 / 4095;
   pos_vp = (data->pk_pos) * 3300 / 4095;
@@ -169,6 +204,10 @@ void setup()
 {
   // put your setup code here, to run once:
   Serial.begin(115200);
+
+  lcd.init();
+  lcd.backlight();
+
   pinMode(PIN_HALF_A, INPUT);
   pinMode(PIN_1_A, INPUT);
   pinMode(PIN_2_A, INPUT);
@@ -191,8 +230,8 @@ void setup()
   xTaskCreate(vPutQueueTask2, "vPutQueueTask2", 2000, NULL, tskIDLE_PRIORITY - 2, &xHandle2);
   xTaskCreate(vPutQueueTask3, "vPutQueueTask3", 2000, NULL, tskIDLE_PRIORITY - 2, &xHandle3);
 
-  lcd.init();
-  lcd.backlight();
+  // lcd.init();
+  // lcd.backlight();
 
   mutex = xSemaphoreCreateMutex();
   xTaskCreate(TaskPrintSCR, "TaskPrintSCR", 2000, NULL, tskIDLE_PRIORITY - 1, &xHandle3);
@@ -206,6 +245,7 @@ void loop()
 
 void TaskPrintSCR(void *pvParameters)
 {
+  printWelcome();
   while (true)
   {
     xSemaphoreTake(mutex, portMAX_DELAY);
@@ -232,6 +272,9 @@ void vGetQueueTask(void *pvParameters)
   uint32_t sum_neg = 0;
   uint32_t sum_level = 0;
 
+  uint16_t cal_pos_median[N_AVG];
+  uint16_t cal_neg_median[N_AVG];
+
   while (true)
   {
     if (xQueueReceive(qu_task, (void *)&data, 0) == pdTRUE, 50)
@@ -239,20 +282,28 @@ void vGetQueueTask(void *pvParameters)
       // Serial.println("pin:" + String(data.number) + " value: " + String(data.value));
       // Serial.println("up " + uptime_formatter::getUptime());
       // Serial.println("up " + millis());
+      // Serial.println("getTask up " + millis());
+      // Serial.println("pin:" + String(data.number) + " value: " + String(data.value));
 
       switch (data.number)
       {
       case 1:
+
+        // Serial.println("getTask up: " + millis());
+        // Serial.println("count: " + String(count1));
+        // Serial.println("pin:" + String(data.number) + " value: " + String(data.value));
         // sum_pos += data.value;
         sum_pos += pow(data.value, 2);
+        cal_pos_median[count1] = data.value;
         count1++;
 
         if (count1 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
-
+          // Serial.println("pos_median: " + String(getMedian(cal_pos_median, 10)));
           // pos_pk = (sum_pos) / (N_AVG);
-          pos_pk = sqrt((sum_pos) / (N_AVG));
+          pos_pk = getMax(cal_pos_median, N_AVG);
+          // pos_pk = sqrt((sum_pos) / (N_AVG));
           pos_pk += (uint16_t)NVREF_COMP((int)pos_pk);
 
           xSemaphoreTake(mutex, portMAX_DELAY);
@@ -266,14 +317,16 @@ void vGetQueueTask(void *pvParameters)
       case 2:
         // sum_neg += data.value;
         sum_neg += pow(data.value, 2);
+        cal_neg_median[count2] = data.value;
         count2++;
 
         if (count2 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
-
+          // Serial.println("neg_median: " + String(getMedian(cal_neg_median, 10)));
           // neg_pk = (sum_neg) / (N_AVG);
-          neg_pk = sqrt((sum_neg) / (N_AVG));
+          neg_pk = getMax(cal_neg_median, N_AVG);
+          // neg_pk = sqrt((sum_neg) / (N_AVG));
           neg_pk += (uint16_t)NVREF_COMP((int)neg_pk);
 
           xSemaphoreTake(mutex, portMAX_DELAY);
@@ -292,7 +345,7 @@ void vGetQueueTask(void *pvParameters)
         if (count3 >= N_AVG)
         {
           uint16_t pos_pk = 0, neg_pk = 0, adc_12v = 0, adc_12f = 0;
-
+          // Serial.println("level_media: " + String(getMedian(cal_level_median, 10)));
           // adc_12v = (sum_level) / (N_AVG);
           adc_12v = sqrt((sum_level) / (N_AVG));
           adc_12v += (uint16_t)NVREF_COMP((int)adc_12v);
@@ -332,7 +385,7 @@ void vPutQueueTask(void *pvParameters)
       }
 
       // vTaskDelay(2 / portTICK_PERIOD_MS);
-      delayMicroseconds(5);
+      delayMicroseconds(2);
     }
 
     data.number = 1;
@@ -364,7 +417,7 @@ void vPutQueueTask2(void *pvParameters)
       }
 
       // vTaskDelay(2 / portTICK_PERIOD_MS);
-      delayMicroseconds(5);
+      delayMicroseconds(2);
     }
 
     // Serial.println("Negative peak -------- uptime : " + String(millis()) + " -----> " + String(max_value));
